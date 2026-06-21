@@ -1,0 +1,66 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { connectDB } from "@/lib/mongodb";
+import News from "@/models/News";
+import { requireAdmin } from "@/lib/session";
+import { uploadImage } from "@/lib/cloudinary";
+
+export async function GET() {
+  await requireAdmin();
+  try {
+    await connectDB();
+    const items = await News.find().sort({ createdAt: -1 }).limit(200).lean();
+    return NextResponse.json({ success: true, data: items });
+  } catch (err) {
+    console.error("Admin news list error:", err);
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
+  }
+}
+
+const createSchema = z.object({
+  title: z.string().trim().min(1, "Title required").max(200),
+  description: z.string().trim().min(1, "Description required").max(5000),
+  type: z.enum(["news", "event"]),
+});
+
+// POST accepts multipart/form-data with: title, description, type, image (File)
+// IMPORTANT: Vercel Free has a ~4.5MB body limit. For larger uploads, switch
+// to direct browser->Cloudinary signed uploads (separate signing endpoint).
+export async function POST(req: Request) {
+  const admin = await requireAdmin();
+  try {
+    const formData = await req.formData();
+    const title = formData.get("title");
+    const description = formData.get("description");
+    const type = formData.get("type");
+    const image = formData.get("image");
+
+    const parsed = createSchema.safeParse({ title, description, type });
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
+    if (!(image instanceof File) || image.size === 0) {
+      return NextResponse.json({ error: "Image is required" }, { status: 400 });
+    }
+    if (image.size > 4 * 1024 * 1024) {
+      return NextResponse.json({ error: "Image must be under 4MB" }, { status: 413 });
+    }
+
+    const buffer = Buffer.from(await image.arrayBuffer());
+    const uploaded = await uploadImage(buffer);
+
+    await connectDB();
+    const created = await News.create({
+      ...parsed.data,
+      image: uploaded.secure_url,
+      imagePublicId: uploaded.public_id,
+      createdBy: admin.sub,
+      isActive: true,
+    });
+
+    return NextResponse.json({ success: true, data: created }, { status: 201 });
+  } catch (err) {
+    console.error("Admin news create error:", err);
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
+  }
+}

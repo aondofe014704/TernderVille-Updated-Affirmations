@@ -1,0 +1,41 @@
+/**
+ * JWT auth utilities. Uses `jose` (not `jsonwebtoken`) because middleware.ts
+ * runs in the Edge runtime which does not support Node crypto.
+ *
+ * Token shape: { sub: userId, email, role, iat, exp }
+ * Stored in: httpOnly cookie named `tv_token`. Never in localStorage.
+ */
+import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not defined in environment variables");
+}
+
+const secret = new TextEncoder().encode(JWT_SECRET);
+
+export interface AuthTokenPayload extends JWTPayload {
+  sub: string;          // user _id as string
+  email: string;
+  role: "admin" | "user";
+  name: string;
+}
+
+export async function signToken(payload: Omit<AuthTokenPayload, "iat" | "exp">): Promise<string> {
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(JWT_EXPIRES_IN)
+    .sign(secret);
+}
+
+export async function verifyToken(token: string): Promise<AuthTokenPayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    return payload as AuthTokenPayload;
+  } catch {
+    return null;
+  }
+}

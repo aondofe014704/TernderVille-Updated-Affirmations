@@ -1,0 +1,50 @@
+/**
+ * User model. Used for admin authentication.
+ *
+ * Changes from legacy:
+ *   - Removed Supabase fields (supabaseId, etc) — single source of truth = Mongo
+ *   - Removed super_admin role tier — single "admin" role is enough
+ *   - Removed canCreateAdmins flag — handled by role check
+ *   - bcrypt pre-save hook preserved
+ *   - phone optional (admins don't need one)
+ */
+import mongoose, { Schema, type Document, type Model } from "mongoose";
+import bcrypt from "bcryptjs";
+
+export interface IUser extends Document {
+  email: string;
+  phone: string;
+  password: string;
+  name: string;
+  role: "user" | "admin";
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidate: string): Promise<boolean>;
+}
+
+const userSchema = new Schema<IUser>(
+  {
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+    phone: { type: String, default: "" },
+    password: { type: String, required: true, select: false },
+    name: { type: String, required: true, trim: true },
+    role: { type: String, enum: ["user", "admin"], default: "user", index: true },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true },
+);
+
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+userSchema.methods.comparePassword = async function (candidate: string): Promise<boolean> {
+  return bcrypt.compare(candidate, this.password);
+};
+
+const User: Model<IUser> = (mongoose.models.User as Model<IUser>) || mongoose.model<IUser>("User", userSchema);
+
+export default User;

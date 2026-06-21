@@ -1,0 +1,21 @@
+/**
+ * Server-Component helpers for reading the current authenticated user.
+ * Call from layouts, pages, and route handlers (NOT middleware — middleware
+ * uses verifyToken directly to stay Edge-compatible).
+ */
+import { redirect } from "next/navigation";
+import { getAuthCookie } from "./cookies";
+import { verifyToken, type AuthTokenPayload } from "./auth";
+
+export async function getCurrentUser(): Promise<AuthTokenPayload | null> {
+  const token = await getAuthCookie();
+  if (!token) return null;
+  return verifyToken(token);
+}
+
+export async function requireAdmin(): Promise<AuthTokenPayload> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/admin/login");
+  if (user.role !== "admin") redirect("/admin/login");
+  return user;
+}

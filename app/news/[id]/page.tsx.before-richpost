@@ -1,0 +1,99 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import { Clock, ArrowLeft } from "lucide-react";
+import PublicLayout from "@/components/layout/PublicLayout";
+import { connectDB } from "@/lib/mongodb";
+import News from "@/models/News";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+async function getNewsItem(id: string) {
+  if (!id.match(/^[0-9a-fA-F]{24}$/)) return null;
+  await connectDB();
+  const item = await News.findOne({ _id: id, isActive: true }).lean();
+  if (!item) return null;
+  return { ...item, _id: String(item._id), createdAt: item.createdAt.toISOString() };
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const item = await getNewsItem(id);
+  if (!item) return { title: "Not found" };
+
+  return {
+    title: item.title,
+    description: item.description.slice(0, 160),
+    alternates: { canonical: `/news/${id}` },
+    openGraph: {
+      title: item.title,
+      description: item.description.slice(0, 200),
+      type: "article",
+      publishedTime: item.createdAt,
+      images: [{ url: item.image, width: 1200, height: 800, alt: item.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: item.title,
+      description: item.description.slice(0, 200),
+      images: [item.image],
+    },
+  };
+}
+
+export default async function NewsDetailPage({ params }: PageProps) {
+  const { id } = await params;
+  const item = await getNewsItem(id);
+  if (!item) notFound();
+
+  // JSON-LD for individual news article — helps Google show rich results
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": item.type === "event" ? "Event" : "NewsArticle",
+    headline: item.title,
+    image: [item.image],
+    datePublished: item.createdAt,
+    description: item.description.slice(0, 200),
+    publisher: {
+      "@type": "EducationalOrganization",
+      name: "Tenderville School",
+      logo: { "@type": "ImageObject", url: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/logo.png` },
+    },
+  };
+
+  return (
+    <PublicLayout>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <article className="bg-gradient-to-br from-gray-50 to-orange-50 py-8 px-4">
+        <div className="max-w-4xl mx-auto">
+          <Link href="/news" className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-6 text-sm font-medium">
+            <ArrowLeft className="w-4 h-4" />
+            Back to News
+          </Link>
+
+          <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="relative h-64 sm:h-96">
+              <Image src={item.image} alt={item.title} fill className="object-cover" priority sizes="(max-width: 768px) 100vw, 1024px" />
+              <div className="absolute top-4 left-4">
+                <span className={item.type === "news" ? "px-3 py-1 text-sm font-semibold rounded-full bg-gradient-to-r from-orange-500 to-orange-600 text-white" : "px-3 py-1 text-sm font-semibold rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white"}>
+                  {item.type === "news" ? "News" : "Event"}
+                </span>
+              </div>
+            </div>
+            <div className="p-6 sm:p-10">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">{item.title}</h1>
+              <div className="flex items-center text-sm text-gray-500 mb-6">
+                <Clock className="w-4 h-4 mr-1.5 text-orange-500" />
+                {new Date(item.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+              </div>
+              <div className="prose prose-lg max-w-none text-gray-700 whitespace-pre-line leading-relaxed">{item.description}</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </PublicLayout>
+  );
+}

@@ -1,0 +1,233 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowLeft, Calendar, Clock, ArrowRight } from "lucide-react";
+import mongoose from "mongoose";
+import PublicLayout from "@/components/layout/PublicLayout";
+import Container from "@/components/layout/Container";
+import { Button } from "@/components/ui/button";
+import { connectDB } from "@/lib/mongodb";
+import News from "@/models/News";
+import { isSafeUrl } from "@/lib/sanitize";
+
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.tendervilleng.net";
+const SITE_NAME = "Tenderville School";
+
+async function fetchPost(id: string) {
+  if (!mongoose.Types.ObjectId.isValid(id)) return null;
+  await connectDB();
+
+  const post = await News.findOne({
+    _id: id,
+    isActive: true,
+    $or: [
+      { publishAt: { $lte: new Date() } },
+      { publishAt: { $exists: false } },
+    ],
+  }).lean();
+  if (!post) return null;
+
+  const publishAt = post.publishAt ?? post.createdAt ?? new Date();
+  return {
+    ...post,
+    _id: String(post._id),
+    createdAt: post.createdAt
+      ? (post.createdAt instanceof Date ? post.createdAt.toISOString() : new Date(post.createdAt).toISOString())
+      : new Date().toISOString(),
+    publishAt: publishAt instanceof Date ? publishAt.toISOString() : new Date(publishAt).toISOString(),
+    eventDate: post.eventDate
+      ? (post.eventDate instanceof Date ? post.eventDate.toISOString() : new Date(post.eventDate).toISOString())
+      : null,
+  };
+}
+
+function formatEventDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-NG", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// ============================================================
+// Per-post Open Graph metadata for WhatsApp/Twitter/LinkedIn previews
+// ============================================================
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const post = await fetchPost(id);
+
+  if (!post) {
+    return {
+      title: "Post not found",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const fullUrl = `${SITE_URL}/news/${post._id}`;
+  const title = post.title;
+  const description = post.description.length > 200
+    ? post.description.slice(0, 197) + "..."
+    : post.description;
+
+  return {
+    title: `${title} | ${SITE_NAME}`,
+    description,
+    alternates: { canonical: fullUrl },
+    openGraph: {
+      type: "article",
+      url: fullUrl,
+      title,
+      description,
+      siteName: SITE_NAME,
+      locale: "en_NG",
+      publishedTime: post.publishAt,
+      images: [
+        {
+          url: post.image,
+          width: 1200,
+          height: 800,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [post.image],
+    },
+  };
+}
+
+export default async function NewsDetailPage({ params }: PageProps) {
+  const { id } = await params;
+  const post = await fetchPost(id);
+  if (!post) notFound();
+
+  const ctaSafe = isSafeUrl(post.ctaUrl) && post.ctaLabel;
+
+  return (
+    <PublicLayout>
+      <article className="bg-gradient-to-br from-orange-50/40 to-white py-8 sm:py-12 min-h-screen">
+        <Container>
+          <div className="max-w-3xl mx-auto">
+            <Link
+              href="/news"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-orange-600 transition-colors mb-6"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to all updates
+            </Link>
+
+            {/* Hero card with FULL image (object-contain, not cropped) */}
+            <div className="tv-glass-strong rounded-3xl overflow-hidden tv-shadow-floated mb-8">
+              {/* Image container: variable height, image displayed in full */}
+              <div className="relative bg-gray-100 flex items-center justify-center" style={{ minHeight: "240px", maxHeight: "70vh" }}>
+                <Image
+                  src={post.image}
+                  alt={post.title}
+                  width={1200}
+                  height={800}
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 768px"
+                  className="w-full h-auto max-h-[70vh] object-contain"
+                />
+                <div className="absolute top-4 left-4 z-10">
+                  <span
+                    className={
+                      post.type === "news"
+                        ? "px-3 py-1 text-xs font-semibold rounded-full tv-btn-gradient text-white shadow-md"
+                        : "px-3 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md"
+                    }
+                  >
+                    {post.type === "news" ? "News" : "Event"}
+                  </span>
+                </div>
+              </div>
+              <div className="p-6 sm:p-8 lg:p-10">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-4">
+                  {post.title}
+                </h1>
+                <p className="text-base sm:text-lg text-gray-700 leading-relaxed">
+                  {post.description}
+                </p>
+              </div>
+            </div>
+
+            {post.type === "event" && (post.eventDate || post.eventTime) && (
+              <div className="bg-white border border-orange-200 rounded-2xl p-5 mb-8 tv-shadow-soft">
+                <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+                  {post.eventDate && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                        <Calendar className="w-5 h-5 text-orange-600" />
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider">Date</div>
+                        <div className="text-base font-medium text-gray-900 mt-0.5">
+                          {formatEventDate(post.eventDate)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {post.eventTime && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                        <Clock className="w-5 h-5 text-orange-600" />
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase font-semibold text-gray-500 tracking-wider">Time</div>
+                        <div className="text-base font-medium text-gray-900 mt-0.5">{post.eventTime}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {post.content && post.content.trim().length > 0 && (
+              <div
+                className="prose prose-base sm:prose-lg max-w-none mb-10
+                  prose-headings:font-bold prose-headings:text-gray-900
+                  prose-a:text-orange-600 prose-a:font-medium hover:prose-a:underline
+                  prose-strong:text-gray-900
+                  prose-ul:my-4 prose-ol:my-4 prose-li:my-1
+                  prose-p:text-gray-800 prose-p:leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: post.content }}
+              />
+            )}
+
+            {ctaSafe && (
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 rounded-2xl p-6 sm:p-8 text-center tv-shadow-soft mb-10">
+                <Button asChild size="lg" className="tv-btn-gradient text-white shadow-md">
+                  <a href={post.ctaUrl as string} target="_blank" rel="noopener noreferrer">
+                    {post.ctaLabel as string} <ArrowRight className="w-4 h-4" />
+                  </a>
+                </Button>
+              </div>
+            )}
+
+            <div className="border-t pt-6">
+              <Link
+                href="/news"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                View all news & events
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </article>
+    </PublicLayout>
+  );
+}

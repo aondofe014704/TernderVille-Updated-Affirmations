@@ -1,0 +1,181 @@
+import Link from "next/link";
+import Image from "next/image";
+import { Clock, Newspaper, ArrowRight, Calendar } from "lucide-react";
+import { connectDB } from "@/lib/mongodb";
+import News from "@/models/News";
+
+interface SearchParams { type?: string; page?: string }
+
+const PAGE_SIZE = 9;
+
+async function fetchNews(searchParams: SearchParams) {
+  await connectDB();
+
+  // For public list: only show active posts. For legacy posts without publishAt,
+  // we still want them visible — so filter on EITHER publishAt <= now OR publishAt is missing.
+  const filter: Record<string, unknown> = {
+    isActive: true,
+    $or: [
+      { publishAt: { $lte: new Date() } },
+      { publishAt: { $exists: false } },
+    ],
+  };
+  if (searchParams.type === "news" || searchParams.type === "event") {
+    filter.type = searchParams.type;
+  }
+
+  const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
+  const skip = (page - 1) * PAGE_SIZE;
+
+  const [items, total] = await Promise.all([
+    News.find(filter).sort({ publishAt: -1, createdAt: -1 }).skip(skip).limit(PAGE_SIZE).lean(),
+    News.countDocuments(filter),
+  ]);
+
+  return {
+    items: items.map((i) => {
+      const publishAt = i.publishAt ?? i.createdAt ?? new Date();
+      return {
+        ...i,
+        _id: String(i._id),
+        createdAt: i.createdAt
+          ? (i.createdAt instanceof Date ? i.createdAt.toISOString() : new Date(i.createdAt).toISOString())
+          : new Date().toISOString(),
+        publishAt: publishAt instanceof Date ? publishAt.toISOString() : new Date(publishAt).toISOString(),
+        eventDate: i.eventDate
+          ? (i.eventDate instanceof Date ? i.eventDate.toISOString() : new Date(i.eventDate).toISOString())
+          : null,
+      };
+    }),
+    pagination: { current: page, pages: Math.ceil(total / PAGE_SIZE), total },
+  };
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-NG", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export default async function NewsList({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
+  const { items, pagination } = await fetchNews(params);
+  const activeTab = (params.type ?? "all") as "all" | "news" | "event";
+
+  return (
+    <>
+      <div className="flex justify-center mb-10">
+        <div className="tv-glass-strong rounded-2xl p-1 flex gap-1">
+          {(["all", "news", "event"] as const).map((tab) => (
+            <Link
+              key={tab}
+              href={tab === "all" ? "/news" : `/news?type=${tab}`}
+              className={
+                activeTab === tab
+                  ? "px-5 sm:px-7 py-2.5 rounded-xl font-semibold text-sm tv-btn-gradient text-white shadow-md"
+                  : "px-5 sm:px-7 py-2.5 rounded-xl font-semibold text-sm text-gray-600 hover:text-orange-600 transition-colors"
+              }
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="tv-glass-strong rounded-3xl p-12 text-center">
+          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Newspaper className="w-10 h-10 text-orange-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">No Updates Found</h2>
+          <p className="text-gray-500">No {activeTab === "all" ? "updates" : activeTab} available at the moment.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+            {items.map((item, idx) => {
+              const isUpcomingEvent = item.type === "event" && item.eventDate;
+              const dateLabel = isUpcomingEvent ? item.eventDate! : item.publishAt;
+              const DateIcon = isUpcomingEvent ? Calendar : Clock;
+
+              return (
+                <article
+                  key={item._id}
+                  className="group tv-glass-strong rounded-2xl overflow-hidden tv-card-hover tv-rise"
+                  style={{ animationDelay: `${idx * 0.05}s` }}
+                >
+                  <div className="relative h-52 overflow-hidden">
+                    <Image
+                      src={item.image}
+                      alt={item.title}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                    <div className="absolute top-4 left-4">
+                      <span
+                        className={
+                          item.type === "news"
+                            ? "px-3 py-1 text-xs font-semibold rounded-full tv-btn-gradient text-white shadow-md"
+                            : "px-3 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md"
+                        }
+                      >
+                        {item.type === "news" ? "News" : "Event"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <h2 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 leading-snug">{item.title}</h2>
+                    <p className="text-gray-600 text-sm mb-5 line-clamp-3 leading-relaxed">{item.description}</p>
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                      <div className="flex items-center text-xs text-gray-500">
+                        <DateIcon className="w-3.5 h-3.5 mr-1.5 text-orange-500" />
+                        {formatShortDate(dateLabel)}
+                      </div>
+                      <Link
+                        href={`/news/${item._id}`}
+                        className="text-orange-600 hover:text-orange-700 font-semibold text-sm inline-flex items-center gap-1 transition-all group-hover:gap-2"
+                      >
+                        Read More <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {pagination.pages > 1 && (
+            <div className="tv-glass-strong rounded-2xl p-4 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Page {pagination.current} of {pagination.pages} <span className="hidden sm:inline">({pagination.total} total)</span>
+              </div>
+              <div className="flex gap-2">
+                {pagination.current > 1 && (
+                  <Link
+                    href={`/news?${new URLSearchParams({ ...(activeTab !== "all" && { type: activeTab }), page: String(pagination.current - 1) }).toString()}`}
+                    className="px-5 py-2 tv-btn-gradient text-white rounded-lg text-sm font-medium shadow-md"
+                  >
+                    Previous
+                  </Link>
+                )}
+                {pagination.current < pagination.pages && (
+                  <Link
+                    href={`/news?${new URLSearchParams({ ...(activeTab !== "all" && { type: activeTab }), page: String(pagination.current + 1) }).toString()}`}
+                    className="px-5 py-2 tv-btn-gradient text-white rounded-lg text-sm font-medium shadow-md"
+                  >
+                    Next
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}

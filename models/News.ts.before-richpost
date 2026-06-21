@@ -1,0 +1,37 @@
+/**
+ * News / Event model. Identical schema to legacy News.js, ported to TypeScript.
+ * Adds index on createdAt for the common "recent news" query pattern.
+ */
+import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
+
+export interface INews extends Document {
+  title: string;
+  description: string;
+  image: string;
+  imagePublicId: string;
+  type: "news" | "event";
+  createdBy: Types.ObjectId;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const newsSchema = new Schema<INews>(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, required: true },
+    image: { type: String, required: true },
+    imagePublicId: { type: String, required: true },
+    type: { type: String, enum: ["news", "event"], required: true, index: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    isActive: { type: Boolean, default: true, index: true },
+  },
+  { timestamps: true },
+);
+
+// Compound index for "active news/events, newest first" — your most common query
+newsSchema.index({ isActive: 1, type: 1, createdAt: -1 });
+
+const News: Model<INews> = (mongoose.models.News as Model<INews>) || mongoose.model<INews>("News", newsSchema);
+
+export default News;

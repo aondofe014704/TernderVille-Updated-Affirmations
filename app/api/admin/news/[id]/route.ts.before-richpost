@@ -1,0 +1,101 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import mongoose from "mongoose";
+import { connectDB } from "@/lib/mongodb";
+import News from "@/models/News";
+import { requireAdmin } from "@/lib/session";
+import { uploadImage, deleteImage } from "@/lib/cloudinary";
+
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
+const updateSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().min(1).max(5000).optional(),
+  type: z.enum(["news", "event"]).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export async function PUT(req: Request, { params }: RouteContext) {
+  await requireAdmin();
+  try {
+    const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    await connectDB();
+    const existing = await News.findById(id);
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const contentType = req.headers.get("content-type") ?? "";
+    let updates: Partial<{ title: string; description: string; type: "news" | "event"; isActive: boolean }> = {};
+    let newImage: { url: string; publicId: string } | null = null;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      updates = {
+        title: (formData.get("title") ?? undefined) as string | undefined,
+        description: (formData.get("description") ?? undefined) as string | undefined,
+        type: (formData.get("type") ?? undefined) as "news" | "event" | undefined,
+      };
+      const image = formData.get("image");
+      if (image instanceof File && image.size > 0) {
+        if (image.size > 4 * 1024 * 1024) {
+          return NextResponse.json({ error: "Image must be under 4MB" }, { status: 413 });
+        }
+        const buffer = Buffer.from(await image.arrayBuffer());
+        const uploaded = await uploadImage(buffer);
+        newImage = { url: uploaded.secure_url, publicId: uploaded.public_id };
+      }
+    } else {
+      updates = (await req.json()) as typeof updates;
+    }
+
+    const parsed = updateSchema.safeParse(updates);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
+
+    Object.assign(existing, parsed.data);
+    if (newImage) {
+      // Replace image — clean up the old one
+      const oldPublicId = existing.imagePublicId;
+      existing.image = newImage.url;
+      existing.imagePublicId = newImage.publicId;
+      await existing.save();
+      // Best effort cleanup; don't fail the request if Cloudinary delete fails
+      deleteImage(oldPublicId).catch((e) => console.warn("Failed to delete old image:", e));
+    } else {
+      await existing.save();
+    }
+
+    return NextResponse.json({ success: true, data: existing });
+  } catch (err) {
+    console.error("Admin news update error:", err);
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: Request, { params }: RouteContext) {
+  await requireAdmin();
+  try {
+    const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    await connectDB();
+    const item = await News.findByIdAndDelete(id);
+    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    // Best effort cleanup
+    deleteImage(item.imagePublicId).catch((e) => console.warn("Failed to delete image:", e));
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Admin news delete error:", err);
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
+  }
+}
