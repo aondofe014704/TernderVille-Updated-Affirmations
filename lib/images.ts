@@ -99,6 +99,19 @@ export const NURTURE_CAROUSEL: CarouselImage[] = [
 ];
 
 // ============================================================
+// ACTIVITIES CAROUSEL — school activities gallery (tend1–tend68)
+// ============================================================
+export const ACTIVITIES_CAROUSEL: CarouselImage[] = Array.from(
+  { length: 68 },
+  (_, i) => ({
+    src: `/assets/tend${i + 1}.png`,
+    alt: `Tenderville school activity — moment ${i + 1}`,
+    width: 1280,
+    height: 960,
+  }),
+);
+
+// ============================================================
 // SINGLE IMAGES (used outside carousels)
 // ============================================================
 export const RESULTS_IMAGE: CarouselImage = {

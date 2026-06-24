@@ -4,6 +4,7 @@ import Hero from "@/components/sections/Hero";
 import Foundation from "@/components/sections/Foundation";
 import WhyTenderville from "@/components/sections/WhyTenderville";
 import NurtureLeaders from "@/components/sections/NurtureLeaders";
+import Activities from "@/components/sections/Activities";
 import Results from "@/components/sections/Results";
 import RevealOnScroll from "@/components/animations/RevealOnScroll";
 
@@ -30,6 +31,10 @@ export default function HomePage() {
 
       <RevealOnScroll>
         <NurtureLeaders />
+      </RevealOnScroll>
+
+      <RevealOnScroll>
+        <Activities />
       </RevealOnScroll>
 
       <RevealOnScroll>

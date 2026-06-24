@@ -16,12 +16,12 @@ interface GalleryItem {
 
 const galleryItems: GalleryItem[] = [
   { id: 1, title: "School Campus", category: "Campus", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753538932/_DSC4862_vt7ucz.jpg", description: "Side view of the campus with a clean white backdrop." },
-  { id: 2, title: "Playground Fun", category: "Events", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753539013/_DSC4914_rayeft.jpg", description: "Joyful school children enjoying playtime on the campus playground." },
-  { id: 3, title: "Academics", category: "Academics", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753538974/_DSC5119_ixip4e.jpg", description: "Students engaged in classroom learning." },
-  { id: 4, title: "Arts & Crafts", category: "Arts", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753538988/_DSC4847_is55d2.jpg", description: "Student artwork beautifully displayed." },
-  { id: 5, title: "School Facilities", category: "Facilities", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753539016/_DSC4940_ozoyu2.jpg", description: "Modern campus facilities." },
+  { id: 2, title: "Playground Fun", category: "Events", image: "/assets/tend51.png", description: "Joyful school children enjoying playtime on the campus playground." },
+  { id: 3, title: "Academics", category: "Academics", image: "/assets/tend37.png", description: "Students engaged in classroom learning." },
+  { id: 4, title: "Arts & Crafts", category: "Arts", image: "/assets/tend7.png", description: "Student artwork beautifully displayed." },
+  { id: 5, title: "School Facilities", category: "Facilities", image: "/assets/tend47.png", description: "Modern campus facilities." },
   { id: 6, title: "Early Learning", category: "Events", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753538971/_DSC5090_w1r957.jpg", description: "Young children engaged in guided learning with their homeroom teacher." },
-  { id: 7, title: "Reception Area", category: "Campus", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753538941/_DSC4819_qx4vql.jpg", description: "Welcoming school reception space." },
+  { id: 7, title: "Reception Area", category: "Campus", image: "/assets/tend10.png", description: "Welcoming school reception space." },
   { id: 8, title: "Hallway Moments", category: "Campus", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753538932/_DSC4908_gooit2.jpg", description: "Students walking through the school hallway." },
   { id: 9, title: "Independent Study", category: "Academics", image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1753539009/_DSC5124_yyqwdo.jpg", description: "A student immersed in solo study." },
 ];

@@ -38,7 +38,7 @@ const classes: ClassInfo[] = [
       "The Toddler Group provides a nurturing and stimulating environment where children can thrive, grow, and explore the world around them, with focus on independence and age-appropriate learning.",
     keyFeatures: ["Independence building activities", "Social-emotional development focus", "Age-appropriate learning experiences", "Exploration and discovery time", "Foundation for lifelong learning"],
     color: "from-purple-500 to-violet-600",
-    image: "https://res.cloudinary.com/dgvjxhqjd/image/upload/v1755850362/preschool_bokskb.jpg",
+    image: "/assets/tend3.png",
   },
   {
     id: "pre-school-1",
